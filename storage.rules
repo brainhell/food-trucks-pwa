@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Reglas para imágenes de productos
+    match /food-trucks/{truckId}/products/{allPaths=**} {
+      // Lectura pública para que las imágenes se muestren en el menú
+      allow read: if true;
+      
+      // Escritura solo para usuarios autenticados
+      allow write: if request.auth != null;
+    }
+    
+    // Reglas para logos y banners de Food Trucks
+    match /food-trucks/{truckId}/branding/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}
