@@ -1,16 +1,45 @@
 "use server";
 
-import { prisma } from "../prisma";
-import type { FoodTruck as PrismaFoodTruck } from "@prisma/client";
+import { adminDb } from "../firebase/admin";
+import { Timestamp } from "firebase-admin/firestore";
 
-export type FoodTruck = PrismaFoodTruck;
+export interface FoodTruck {
+    id: string;
+    name: string;
+    slug: string;
+    description?: string;
+    logoUrl?: string;
+    bannerUrl?: string;
+    primaryColor?: string;
+    accentColor?: string;
+    ownerId: string;
+    active: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+// Helper to convert Firestore doc to FoodTruck
+function mapDocToTruck(doc: FirebaseFirestore.DocumentSnapshot): FoodTruck {
+    const data = doc.data()!;
+    return {
+        id: doc.id,
+        ...data,
+        createdAt: (data.createdAt as Timestamp)?.toDate(),
+        updatedAt: (data.updatedAt as Timestamp)?.toDate(),
+    } as FoodTruck;
+}
 
 // Obtener un truck por su slug (útil para el menú QR)
 export async function getFoodTruckBySlug(slug: string): Promise<FoodTruck | null> {
     try {
-        return await prisma.foodTruck.findUnique({
-            where: { slug }
-        });
+        const snapshot = await adminDb
+            .collection("food_trucks")
+            .where("slug", "==", slug)
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) return null;
+        return mapDocToTruck(snapshot.docs[0]);
     } catch (error) {
         console.error("Error fetching truck by slug:", error);
         return null;
@@ -20,9 +49,12 @@ export async function getFoodTruckBySlug(slug: string): Promise<FoodTruck | null
 // Obtener todos los trucks de un dueño (para el admin)
 export async function getFoodTrucksByOwner(ownerId: string): Promise<FoodTruck[]> {
     try {
-        return await prisma.foodTruck.findMany({
-            where: { ownerId }
-        });
+        const snapshot = await adminDb
+            .collection("food_trucks")
+            .where("ownerId", "==", ownerId)
+            .get();
+
+        return snapshot.docs.map(mapDocToTruck);
     } catch (error) {
         console.error("Error fetching trucks by owner:", error);
         return [];
@@ -32,20 +64,26 @@ export async function getFoodTrucksByOwner(ownerId: string): Promise<FoodTruck[]
 // Crear o actualizar un truck
 export async function saveFoodTruck(truck: Partial<FoodTruck>): Promise<string> {
     try {
-        if (truck.id) {
+        const { id, ...data } = truck;
+        const now = Timestamp.now();
+
+        const truckData = {
+            ...data,
+            updatedAt: now,
+        };
+
+        if (id) {
             // Update
-            const { id, ...data } = truck;
-            const updated = await prisma.foodTruck.update({
-                where: { id },
-                data: data as any // Type assertion needed for partial update
-            });
-            return updated.id;
+            await adminDb.collection("food_trucks").doc(id).update(truckData);
+            return id;
         } else {
             // Create
-            const created = await prisma.foodTruck.create({
-                data: truck as any
+            const docRef = await adminDb.collection("food_trucks").add({
+                ...truckData,
+                createdAt: now,
+                active: truck.active ?? true,
             });
-            return created.id;
+            return docRef.id;
         }
     } catch (error) {
         console.error("Error saving truck:", error);
@@ -56,9 +94,12 @@ export async function saveFoodTruck(truck: Partial<FoodTruck>): Promise<string> 
 // Obtener todos los trucks activos (para el Hub público)
 export async function getAllActiveFoodTrucks(): Promise<FoodTruck[]> {
     try {
-        return await prisma.foodTruck.findMany({
-            where: { active: true }
-        });
+        const snapshot = await adminDb
+            .collection("food_trucks")
+            .where("active", "==", true)
+            .get();
+
+        return snapshot.docs.map(mapDocToTruck);
     } catch (error) {
         console.error("Error fetching active trucks:", error);
         return [];

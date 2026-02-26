@@ -424,7 +424,7 @@ export default function MenuManagementPage() {
                                     currentImageUrl={editingProduct?.imageUrl || undefined}
                                     truckId={truckId || ''}
                                     productId={editingProduct?.id}
-                                    onImageUploaded={(url) => setEditingProduct({ ...editingProduct, imageUrl: url })}
+                                    onImageUploaded={(url: string) => setEditingProduct({ ...editingProduct, imageUrl: url })}
                                     onImageRemoved={() => setEditingProduct({ ...editingProduct, imageUrl: '' })}
                                 />
                             </div>

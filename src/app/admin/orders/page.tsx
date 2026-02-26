@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOrders, updateOrderStatus, OrderWithItems } from "@/lib/services/orderService";
+import { getOrders, updateOrderStatus, OrderWithItems, Order } from "@/lib/services/orderService";
 import { getFoodTrucksByOwner, FoodTruck } from "@/lib/services/foodTruckService";
+import { useOrders } from "@/hooks/useOrders";
 import {
     ShoppingBag,
     Clock,
@@ -21,8 +22,6 @@ import {
 export default function OrdersPage() {
     const [trucks, setTrucks] = useState<FoodTruck[]>([]);
     const [selectedTruckId, setSelectedTruckId] = useState<string | null>(null);
-    const [orders, setOrders] = useState<OrderWithItems[]>([]);
-    const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<OrderWithItems['status'] | 'all'>('all');
     const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
@@ -42,57 +41,35 @@ export default function OrdersPage() {
         init();
     }, []);
 
-    // Polling for orders
+    // Real-time hook for orders
+    const { orders, loading: ordersLoading } = useOrders(selectedTruckId || "");
+
+    // Notification logic
     useEffect(() => {
         const audio = new Audio("/sounds/bell.mp3");
-        if (!selectedTruckId) return;
-
-        const fetchOrders = async () => {
-            try {
-                const newOrders = await getOrders(selectedTruckId);
-
-                if (newOrders.length > 0) {
-                    const newestId = newOrders[0].id;
-
-                    if (lastOrderId && newestId !== lastOrderId && newOrders[0].status === 'pending') {
-                        audio.play().catch(e => console.log("Audio notify blocked:", e));
-                    }
-                    setLastOrderId(newestId);
-                }
-                setOrders(newOrders);
-                setLoading(false);
-            } catch (error) {
-                console.error("Error fetching orders:", error);
+        if (orders.length > 0) {
+            const newestId = orders[0].id;
+            if (lastOrderId && newestId !== lastOrderId && orders[0].status === 'pending') {
+                audio.play().catch(e => console.log("Audio notify blocked:", e));
             }
-        };
-
-        // Initial fetch
-        fetchOrders();
-
-        // Interval
-        const intervalId = setInterval(fetchOrders, 5000);
-
-        return () => clearInterval(intervalId);
-    }, [selectedTruckId, lastOrderId]);
+            setLastOrderId(newestId);
+        }
+    }, [orders, lastOrderId]);
 
     const filteredOrders = filter === 'all'
         ? orders
-        : orders.filter(o => o.status === filter);
+        : orders.filter((o: Order) => o.status === filter);
 
     const handleUpdateStatus = async (orderId: string, status: OrderWithItems['status']) => {
         try {
             await updateOrderStatus(orderId, status);
-            // Re-fetch orders immediately to update UI state properly (especially for moved items)
-            if (selectedTruckId) {
-                const updatedOrders = await getOrders(selectedTruckId);
-                setOrders(updatedOrders);
-            }
+            // No need to manually refresh, Firestore hook handles it!
         } catch (error) {
             console.error(error);
         }
     };
 
-    if (loading) {
+    if (ordersLoading && orders.length === 0) {
         return (
             <div className="flex h-[60vh] items-center justify-center">
                 <Loader />
@@ -152,7 +129,7 @@ export default function OrdersPage() {
                         <p className="text-gray-400 font-bold">No hay pedidos que coincidan con el filtro.</p>
                     </div>
                 ) : (
-                    filteredOrders.map((order) => (
+                    filteredOrders.map((order: Order) => (
                         <div
                             key={order.id}
                             className="bg-white rounded-3xl border border-gray-100 p-6 hover:shadow-xl hover:shadow-gray-100/50 transition-all group"
@@ -177,7 +154,7 @@ export default function OrdersPage() {
                                             <span className="flex items-center gap-1.5 text-primary font-bold">
                                                 <MapPin size={14} /> {order.tableNumber ?? "Sin mesa"}
                                             </span>
-                                            {/* Date handling: Prisma dates are Date objects but checking just in case */}
+                                            {/* Date handling: Firestore dates are mapped to Date objects */}
                                             <span className="flex items-center gap-1.5">
                                                 <Clock size={14} /> {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </span>
@@ -218,7 +195,7 @@ export default function OrdersPage() {
 
                             {/* Detalle de Items */}
                             <div className="mt-6 pt-6 border-t border-gray-50 flex flex-wrap gap-3">
-                                {order.items.map((item, idx) => (
+                                {order.items.map((item: any, idx: number) => (
                                     <div key={idx} className="bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 flex items-center gap-3">
                                         <span className="h-6 w-6 bg-white rounded-lg flex items-center justify-center text-xs font-black text-primary border border-gray-100 shadow-sm">
                                             {item.quantity}

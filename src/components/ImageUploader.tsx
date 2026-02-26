@@ -55,10 +55,10 @@ export default function ImageUploader({
             // Comprimir antes de subir
             const compressedFile = await uploadService.compressImage(file, 1200, 0.85);
 
-            const url = await uploadService.uploadProductImage(
+            const url = await uploadService.uploadImage(
                 compressedFile,
                 truckId,
-                productId,
+                productId ? 'products' : 'logos',
                 (progressData) => {
                     setProgress(progressData);
                 }
@@ -171,8 +171,8 @@ export default function ImageUploader({
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
                     className={`h-48 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all ${dragActive
-                            ? 'border-primary bg-primary/5'
-                            : 'border-gray-200 hover:border-primary/50 hover:bg-gray-50'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-primary/50 hover:bg-gray-50'
                         }`}
                 >
                     <ImageIcon size={48} className={dragActive ? 'text-primary' : 'text-gray-300'} />

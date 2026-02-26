@@ -15,6 +15,7 @@ import {
     Image as ImageIcon
 } from "lucide-react";
 import Link from "next/link";
+import ImageUploader from "@/components/ImageUploader";
 
 export default function TrucksManagementPage() {
     const [trucks, setTrucks] = useState<FoodTruck[]>([]);
@@ -50,17 +51,17 @@ export default function TrucksManagementPage() {
         if (!editingTruck?.name) return;
         setIsSaving(true);
         try {
-            const truckData = {
+            const truckData: Partial<FoodTruck> = {
                 name: editingTruck.name,
                 description: editingTruck.description || "",
                 slug: editingTruck.slug || generateSlug(editingTruck.name),
                 active: editingTruck.active ?? true,
                 ownerId: "admin-user-123",
-                logoUrl: editingTruck.logoUrl || null,
-                bannerUrl: editingTruck.bannerUrl || null,
-                primaryColor: editingTruck.primaryColor || "#CC562A", // Default un poco más suave
+                logoUrl: editingTruck.logoUrl || undefined,
+                bannerUrl: editingTruck.bannerUrl || undefined,
+                primaryColor: editingTruck.primaryColor || "#CC562A",
                 accentColor: editingTruck.accentColor || "#1e293b",
-                id: editingTruck.id as any
+                id: editingTruck.id
             };
             await saveFoodTruck(truckData);
             await loadTrucks();
@@ -237,6 +238,24 @@ export default function TrucksManagementPage() {
                                             />
                                         </div>
                                     </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Logo del Truck</label>
+                                    <ImageUploader
+                                        truckId={editingTruck?.id || 'new'}
+                                        currentImageUrl={editingTruck?.logoUrl || undefined}
+                                        onImageUploaded={(url: string) => setEditingTruck({ ...editingTruck, logoUrl: url })}
+                                    />
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Banner del Truck</label>
+                                    <ImageUploader
+                                        truckId={editingTruck?.id || 'new'}
+                                        currentImageUrl={editingTruck?.bannerUrl || undefined}
+                                        onImageUploaded={(url: string) => setEditingTruck({ ...editingTruck, bannerUrl: url })}
+                                    />
                                 </div>
 
                                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">

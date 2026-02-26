@@ -1,12 +1,12 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "@/lib/prisma"
+import { FirestoreAdapter } from "@auth/firebase-adapter"
+import { adminDb } from "@/lib/firebase/admin"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-    adapter: PrismaAdapter(prisma),
+    adapter: FirestoreAdapter(adminDb),
     providers: [
         Credentials({
             credentials: {
@@ -20,8 +20,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
                 if (parsedCredentials.success) {
                     const { email, password } = parsedCredentials.data;
-                    const user = await prisma.user.findUnique({ where: { email } });
-                    if (!user || !user.password) return null;
+
+                    // Firestore Query for user by email
+                    const userSnapshot = await adminDb
+                        .collection("users")
+                        .where("email", "==", email)
+                        .limit(1)
+                        .get();
+
+                    if (userSnapshot.empty) return null;
+
+                    const userDoc = userSnapshot.docs[0];
+                    const user = { id: userDoc.id, ...userDoc.data() } as any;
+
+                    if (!user.password) return null;
 
                     const passwordsMatch = await bcrypt.compare(password, user.password);
                     if (passwordsMatch) return user;
@@ -35,7 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     callbacks: {
         jwt({ token, user }) {
             if (user) {
-                token.role = user.role;
+                token.role = (user as any).role || "user";
                 token.id = user.id;
             }
             return token;

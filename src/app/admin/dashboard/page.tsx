@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { getFoodTrucksByOwner, FoodTruck } from "@/lib/services/foodTruckService";
-import { getOrders, updateOrderStatus, OrderWithItems } from "@/lib/services/orderService";
+import { updateOrderStatus, OrderWithItems, Order } from "@/lib/services/orderService";
 import { reportService } from "@/lib/services/reportService";
+import { getLowStockProducts, Product } from "@/lib/services/menuService";
+import { useOrders } from "@/hooks/useOrders";
 import {
     ShoppingBag,
     TrendingUp,
@@ -22,13 +24,11 @@ import {
 export default function AdminDashboard() {
     const [trucks, setTrucks] = useState<FoodTruck[]>([]);
     const [selectedTruckId, setSelectedTruckId] = useState<string | null>(null);
-    const [orders, setOrders] = useState<OrderWithItems[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
     const [lastNotification, setLastNotification] = useState<string | null>(null);
 
+    // Initial load
     useEffect(() => {
-        const audio = new Audio("/sounds/bell.mp3");
-
         async function initDashboard() {
             try {
                 const truckData = await getFoodTrucksByOwner("admin-user-123");
@@ -39,40 +39,37 @@ export default function AdminDashboard() {
                 }
             } catch (error) {
                 console.error(error);
-                setLoading(false);
             }
         }
         initDashboard();
     }, []);
 
+    // Real-time hook for orders
+    const { orders, loading: ordersLoading } = useOrders(selectedTruckId || "");
+
+    // Stock alerts and notifications
     useEffect(() => {
         const audio = new Audio("/sounds/bell.mp3");
-        if (!selectedTruckId) return;
 
-        console.log(`[Dashboard] Polling requests for: ${selectedTruckId}`);
+        async function refreshExtras() {
+            if (!selectedTruckId) return;
 
-        const fetchOrders = async () => {
-            const newOrders = await getOrders(selectedTruckId);
-            if (newOrders.length > 0) {
-                const newestId = newOrders[0].id;
+            // Check for low stock
+            const lowStock = await getLowStockProducts(selectedTruckId);
+            setLowStockProducts(lowStock);
 
-                if (lastNotification && newestId !== lastNotification && newOrders[0].status === 'pending') {
+            // Handle audio notification for new orders
+            if (orders.length > 0) {
+                const newestId = orders[0].id;
+                if (lastNotification && newestId !== lastNotification && orders[0].status === 'pending') {
                     audio.play().catch(e => console.log("Audio play blocked:", e));
                 }
                 setLastNotification(newestId);
             }
-            setOrders(newOrders);
-            setLoading(false);
-        };
+        }
 
-        // Initial fetch
-        fetchOrders();
-
-        // Interval
-        const intervalId = setInterval(fetchOrders, 5000);
-
-        return () => clearInterval(intervalId);
-    }, [selectedTruckId, lastNotification]);
+        refreshExtras();
+    }, [selectedTruckId, orders, lastNotification]);
 
     const handleUpdateStatus = async (orderId: string, status: OrderWithItems['status']) => {
         try {
@@ -88,7 +85,7 @@ export default function AdminDashboard() {
 
     const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'preparing').length;
 
-    if (loading) {
+    if (ordersLoading && orders.length === 0) {
         return (
             <div className="flex h-[60vh] items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
@@ -261,18 +258,19 @@ export default function AdminDashboard() {
                             Gestión de Stock
                         </h2>
                         <div className="space-y-4">
-                            <AlertItem
-                                title="Pan Gourmet"
-                                status="Bajo Stock"
-                                desc="Menos de 15 unidades restantes"
-                                type="warning"
-                            />
-                            <AlertItem
-                                title="Queso Azul"
-                                status="Agotado"
-                                desc="Reponer para Gourmet Street Burger"
-                                type="error"
-                            />
+                            {lowStockProducts.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic">Todo el inventario está en niveles óptimos.</p>
+                            ) : (
+                                lowStockProducts.slice(0, 3).map(p => (
+                                    <AlertItem
+                                        key={p.id}
+                                        title={p.name}
+                                        status={p.stock === 0 ? "Agotado" : "Bajo Stock"}
+                                        desc={p.stock === 0 ? "Reponer inmediatamente" : `${p.stock} unidades restantes`}
+                                        type={p.stock === 0 ? "error" : "warning"}
+                                    />
+                                ))
+                            )}
                         </div>
                         <button className="w-full py-4 bg-gray-50 text-slate-600 rounded-2xl text-sm font-bold hover:bg-gray-100 transition-colors">
                             Ver Inventario Completo
