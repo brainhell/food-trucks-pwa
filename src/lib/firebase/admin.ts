@@ -18,8 +18,8 @@ if (!admin.apps.length && isConfigured) {
     console.warn("⚠️ Firebase Admin not initialized: Missing environment variables.");
 }
 
-const adminDb = admin.firestore();
-const adminAuth = admin.auth();
-const adminStorage = admin.storage();
+const adminDb = admin.apps.length > 0 ? admin.firestore() : null as any;
+const adminAuth = admin.apps.length > 0 ? admin.auth() : null as any;
+const adminStorage = admin.apps.length > 0 ? admin.storage() : null as any;
 
 export { adminDb, adminAuth, adminStorage };
